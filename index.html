@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Antônio Miguel — Vision AI</title>
+
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bg:        #0a0a0f;
+      --surface:   #13131a;
+      --border:    #1f1f2e;
+      --accent:    #00e5ff;
+      --accent2:   #7c3aed;
+      --text:      #e8e8f0;
+      --muted:     #5a5a7a;
+      --radius:    16px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Noise grain overlay ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      background-size: 180px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Ambient glow blobs ── */
+    .blob {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(120px);
+      opacity: 0.12;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .blob-1 { width: 500px; height: 500px; background: var(--accent2); top: -150px; left: -150px; }
+    .blob-2 { width: 400px; height: 400px; background: var(--accent);  bottom: -100px; right: -100px; }
+
+    /* ── Layout ── */
+    .wrapper {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2.5rem 1rem 4rem;
+    }
+
+    /* ── Header ── */
+    header { text-align: center; margin-bottom: 2.5rem; }
+
+    .brand-tag {
+      display: inline-block;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.7rem;
+      font-weight: 500;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      border-radius: 100px;
+      padding: 4px 14px;
+      margin-bottom: 1rem;
+    }
+
+    h1 {
+      font-family: 'Syne', sans-serif;
+      font-size: clamp(2rem, 6vw, 3.8rem);
+      font-weight: 800;
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+      color: #fff;
+    }
+    h1 span {
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .subtitle {
+      margin-top: 0.6rem;
+      color: var(--muted);
+      font-size: 0.95rem;
+      font-weight: 300;
+    }
+
+    /* ── Card ── */
+    .card-ai {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 2rem;
+      width: 100%;
+      max-width: 520px;
+      box-shadow: 0 0 0 1px rgba(0,229,255,.04), 0 32px 80px rgba(0,0,0,.5);
+    }
+
+    /* ── Webcam area ── */
+    #webcam-container {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      background: #08080e;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+      margin-bottom: 1.5rem;
+    }
+
+    #webcam-container canvas {
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover;
+      border-radius: 12px;
+    }
+
+    .cam-placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.75rem;
+      color: var(--muted);
+    }
+
+    .cam-icon {
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      background: var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem;
+    }
+
+    .cam-placeholder p { font-size: 0.85rem; }
+
+    /* ── Scan line animation (active) ── */
+    .scanning::after {
+      content: '';
+      position: absolute;
+      left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      animation: scan 2s linear infinite;
+      pointer-events: none;
+    }
+    @keyframes scan {
+      0%   { top: 0; }
+      100% { top: 100%; }
+    }
+
+    /* ── Start button ── */
+    .btn-start {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6rem;
+      width: 100%;
+      padding: 0.9rem 1.5rem;
+      border: none;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent2) 0%, var(--accent) 100%);
+      color: #fff;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1rem;
+      font-weight: 500;
+      letter-spacing: 0.01em;
+      cursor: pointer;
+      transition: opacity .2s, transform .15s, box-shadow .2s;
+      box-shadow: 0 0 24px rgba(0,229,255,.2);
+      margin-bottom: 1.75rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-start::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,.15), transparent);
+      opacity: 0;
+      transition: opacity .2s;
+    }
+
+    .btn-start:hover { opacity: .92; transform: translateY(-1px); box-shadow: 0 0 36px rgba(0,229,255,.3); }
+    .btn-start:hover::before { opacity: 1; }
+    .btn-start:active { transform: translateY(0); }
+    .btn-start:disabled { opacity: .45; cursor: not-allowed; transform: none; box-shadow: none; }
+
+    /* pulse dot */
+    .pulse-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #fff;
+      animation: pulse 1.4s ease-in-out infinite;
+      display: none;
+    }
+    .running .pulse-dot { display: block; }
+    @keyframes pulse {
+      0%,100% { opacity: 1; transform: scale(1); }
+      50%      { opacity: .4; transform: scale(.6); }
+    }
+
+    /* ── Labels / progress bars ── */
+    .label-section h6 {
+      font-family: 'Syne', sans-serif;
+      font-size: 0.7rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 1rem;
+    }
+
+    #label-container { display: flex; flex-direction: column; gap: 0.9rem; }
+
+    .prediction-item { display: flex; flex-direction: column; gap: 4px; }
+
+    .prediction-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.82rem;
+    }
+
+    .prediction-name { color: var(--text); font-weight: 500; }
+    .prediction-pct  { color: var(--accent); font-weight: 500; font-variant-numeric: tabular-nums; }
+
+    .progress-track {
+      width: 100%;
+      height: 6px;
+      background: var(--border);
+      border-radius: 100px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      border-radius: 100px;
+      background: linear-gradient(90deg, var(--accent2), var(--accent));
+      width: 0%;
+      transition: width .25s ease;
+    }
+
+    /* ── Footer ── */
+    footer {
+      position: relative; z-index: 1;
+      margin-top: 3rem;
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+  <!-- Ambient blobs -->
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+
+  <div class="wrapper">
+    <header>
+      <div class="brand-tag">Vision AI</div>
+      <h1>Antônio <span>Miguel</span></h1>
+      <p class="subtitle">Classificação de imagem em tempo real · Teachable Machine</p>
+    </header>
+
+    <div class="card-ai">
+
+      <!-- Webcam -->
+      <div id="webcam-container">
+        <div class="cam-placeholder" id="placeholder">
+          <div class="cam-icon">📷</div>
+          <p>Clique em <strong>Iniciar Câmera</strong><br>para começar a análise</p>
+        </div>
+      </div>
+
+      <!-- Button -->
+      <button class="btn-start" id="startBtn" onclick="init()">
+        <span class="pulse-dot"></span>
+        <span id="btnText">Iniciar Câmera</span>
+      </button>
+
+      <!-- Predictions -->
+      <div class="label-section">
+        <h6>Resultado da análise</h6>
+        <div id="label-container"></div>
+      </div>
+
+    </div>
+
+    <footer>
+      Desenvolvido por <a href="#">Antônio Miguel</a> · Powered by
+      <a href="https://teachablemachine.withgoogle.com/" target="_blank">Teachable Machine</a>
+    </footer>
+  </div>
+
+  <!-- TensorFlow + Teachable Machine -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+    const URL = "https://teachablemachine.withgoogle.com/models/phokOeSn_/";
+    let model, webcam, labelContainer, maxPredictions;
+
+    async function init() {
+      const btn     = document.getElementById("startBtn");
+      const btnText = document.getElementById("btnText");
+
+      btn.disabled  = true;
+      btnText.textContent = "Carregando modelo…";
+
+      try {
+        const modelURL    = URL + "model.json";
+        const metadataURL = URL + "metadata.json";
+
+        model          = await tmImage.load(modelURL, metadataURL);
+        maxPredictions = model.getTotalClasses();
+
+        const flip = true;
+        webcam = new tmImage.Webcam(400, 400, flip);
+        await webcam.setup();   // requests camera permission
+        await webcam.play();
+
+        // swap placeholder for canvas
+        const placeholder = document.getElementById("placeholder");
+        if (placeholder) placeholder.remove();
+
+        const container = document.getElementById("webcam-container");
+        container.appendChild(webcam.canvas);
+        container.classList.add("scanning");
+
+        // build prediction rows
+        labelContainer = document.getElementById("label-container");
+        labelContainer.innerHTML = "";
+
+        for (let i = 0; i < maxPredictions; i++) {
+          const item = document.createElement("div");
+          item.className = "prediction-item";
+          item.innerHTML = `
+            <div class="prediction-header">
+              <span class="prediction-name" id="name-${i}">Classe ${i + 1}</span>
+              <span class="prediction-pct"  id="pct-${i}">0%</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill" id="bar-${i}"></div>
+            </div>`;
+          labelContainer.appendChild(item);
+        }
+
+        // button → running state
+        btn.classList.add("running");
+        btnText.textContent = "Analisando…";
+        btn.disabled = false;
+
+        window.requestAnimationFrame(loop);
+
+      } catch (err) {
+        console.error(err);
+        btn.disabled = false;
+        btnText.textContent = "Tentar novamente";
+      }
+    }
+
+    async function loop() {
+      webcam.update();
+      await predict();
+      window.requestAnimationFrame(loop);
+    }
+
+    async function predict() {
+      const prediction = await model.predict(webcam.canvas);
+      for (let i = 0; i < maxPredictions; i++) {
+        const prob = prediction[i].probability;
+        const pct  = Math.round(prob * 100);
+
+        const nameEl = document.getElementById(`name-${i}`);
+        const pctEl  = document.getElementById(`pct-${i}`);
+        const barEl  = document.getElementById(`bar-${i}`);
+
+        if (nameEl) nameEl.textContent = prediction[i].className;
+        if (pctEl)  pctEl.textContent  = pct + "%";
+        if (barEl)  barEl.style.width  = pct + "%";
+      }
+    }
+  </script>
+</body>
+</html>
